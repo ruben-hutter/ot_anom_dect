@@ -16,3 +16,6 @@ docs/agents/
 docs/adr/
 GLOSSARY.md
 GLOSSARY-MAP.md
+
+# nix-direnv cache
+.direnv/

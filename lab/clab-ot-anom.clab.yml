@@ -1,0 +1,22 @@
+name: ot-anom
+
+# Pinned subnet so the lab doesn't collide with other docker networks on this
+# host (the containerlab default 172.20.20.0/24 overlapped one).
+mgmt:
+  network: ot-anom-mgmt
+  ipv4-subnet: 172.27.100.0/24
+  ipv6-subnet: 3fff:172:27:100::/64
+
+topology:
+  nodes:
+    # runs the D-Bus daemon, listening on TCP :55556
+    bus-host:
+      kind: linux
+      image: debian:bookworm-slim
+      binds:
+        - ./dbus:/opt/dbus:ro
+
+    # a client that talks to the bus over the network
+    client:
+      kind: linux
+      image: debian:bookworm-slim
