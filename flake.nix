@@ -1,11 +1,13 @@
 {
-  # Reproducible dev environment for the ot-anom project (D-Bus OT anomaly
+  # Reproducible dev environment for the ot-anom project (Modbus TCP OT anomaly
   # detection). Enter with direnv (`direnv allow`) or `nix develop`.
   #
   # Design notes:
   # - The analysis language is not decided yet; the pinned python stack below
   #   (numpy/pandas/scikit-learn/matplotlib) is the default starting point.
-  #   Add packages here instead of pip-installing ad hoc.
+  #   pymodbus is included so the host can also act as a Modbus master against
+  #   the lab (and later replay/inject traffic). Add packages here instead of
+  #   pip-installing ad hoc.
   # - just orchestrates the lab (lab/justfile).
   # - Version pins travel with flake.lock (committed) => reproducible.
 
@@ -28,6 +30,7 @@
             pandas
             scikit-learn
             matplotlib
+            pymodbus             # Modbus TCP client for poking/replaying lab traffic
             # later, when needed: ps.jupyterlab ps.seaborn ps.plotly
           ]);
         in
@@ -37,10 +40,9 @@
               py
               pkgs.just             # lab orchestration (lab/justfile)
               pkgs.wireshark-cli    # tshark, pcap inspection from the host
-              pkgs.dbus            # dbus-monitor/send for poking the lab bus
             ];
             shellHook = ''
-              echo "ot-anom dev shell: python312 (+pandas/sklearn), just, tshark, dbus tools"
+              echo "ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark"
               echo "lab: cd lab && just --list   (containerlab + docker; container names clab-ot-anom-*)"
             '';
           };

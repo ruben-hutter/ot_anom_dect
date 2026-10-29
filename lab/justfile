@@ -1,24 +1,23 @@
-# ot-anom lab — hello-world D-Bus over TCP in containerlab.
+# ot-anom lab — hello-world Modbus TCP in containerlab.
 # Run from this directory. `just` alone lists recipes.
 
-# deploy 2 containers (bus-host + client) and start the bus.
-# First run installs dbus inside them (~1 min, needs internet).
+# deploy 2 containers (modbus-server + modbus-master) and start the slave.
+# First run installs python3-pymodbus inside them (~1 min, needs internet).
 up:
     clab dep -t clab-ot-anom.clab.yml
-    docker exec clab-ot-anom-bus-host sh -c 'apt-get update -qq && apt-get install -y -qq dbus >/dev/null'
-    docker exec clab-ot-anom-client sh -c 'apt-get update -qq && apt-get install -y -qq dbus >/dev/null'
-    docker exec -d clab-ot-anom-bus-host sh -c 'dbus-daemon --config-file=/opt/dbus/system.conf --nofork --nopidfile >/tmp/dbus.log 2>&1'
+    docker exec clab-ot-anom-modbus-server sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus >/dev/null'
+    docker exec clab-ot-anom-modbus-master sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus >/dev/null'
+    docker exec -d clab-ot-anom-modbus-server sh -c 'python3 /opt/modbus/server.py >/tmp/modbus-server.log 2>&1'
     @echo "lab is up. try: just hello"
 
-# hello world: a method call across the network (you see the reply), then a
-# signal, and the bus reporting that it saw the signal.
+# hello world: the master writes two holding registers across the network
+# (FC6), polls them back (FC3) and reads the slave's read-only input
+# registers (FC4) — then the server log shows the same exchange from the
+# slave side, register state included.
 hello:
-    docker exec clab-ot-anom-client sh -c 'DBUS_SESSION_BUS_ADDRESS="tcp:host=bus-host,port=55556" dbus-send --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames'
-    docker exec -d clab-ot-anom-bus-host sh -c "dbus-monitor --address tcp:host=127.0.0.1,port=55556 \"type='signal',interface='com.hello'\" >/tmp/hello.log 2>&1"
-    sleep 1
-    docker exec clab-ot-anom-client sh -c 'DBUS_SESSION_BUS_ADDRESS="tcp:host=bus-host,port=55556" dbus-send --type=signal /com/hello com.hello.World string:"hello world"'
-    sleep 1
-    docker exec clab-ot-anom-bus-host sh -c 'grep com.hello /tmp/hello.log'
+    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/master.py modbus-server
+    @echo "--- modbus-server saw: ---"
+    docker exec clab-ot-anom-modbus-server sh -c 'grep -E "slave up|seeded|applied|served" /tmp/modbus-server.log'
 
 # tear the lab down
 down:

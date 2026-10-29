@@ -9,14 +9,17 @@ mgmt:
 
 topology:
   nodes:
-    # runs the D-Bus daemon, listening on TCP :55556
-    bus-host:
+    # runs the Modbus TCP slave/simulator, listening on :502 and holding the
+    # register map (coils/discrete inputs/holding/input registers)
+    modbus-server:
       kind: linux
       image: debian:bookworm-slim
       binds:
-        - ./dbus:/opt/dbus:ro
+        - ./modbus:/opt/modbus:ro
 
-    # a client that talks to the bus over the network
-    client:
+    # a Modbus TCP master that polls and writes registers over the network
+    modbus-master:
       kind: linux
       image: debian:bookworm-slim
+      binds:
+        - ./modbus:/opt/modbus:ro

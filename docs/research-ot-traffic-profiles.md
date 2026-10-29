@@ -2,7 +2,8 @@
 
 *Purpose: answer "what packets/messages/signals does an OT network actually carry, and in what
 quantities?" so the lab can generate traffic that a k-means baseline can honestly learn from.
-Complements [primer-dbus-kmeans.md](primer-dbus-kmeans.md), which covers D-Bus message anatomy,
+Complements [primer-modbus-kmeans.md](primer-modbus-kmeans.md), which covers Modbus TCP message
+anatomy,
 featurization (§3) and k-means (§4) — this doc stays on the OT side and ends with a mapping
 (§5) back to that featurization. Method: primary sources only (specs, standards bodies, NIST,
 first-party vendor docs, peer-reviewed measurement studies); every number carries a citation
