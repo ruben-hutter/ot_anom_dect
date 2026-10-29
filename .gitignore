@@ -19,3 +19,6 @@ GLOSSARY-MAP.md
 
 # nix-direnv cache
 .direnv/
+
+# Received theses / papers (reference reading, not repo content)
+docs/*.pdf

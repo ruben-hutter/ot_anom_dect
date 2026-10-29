@@ -7,16 +7,15 @@ k-means applies to traffic patterns". Spec reference: https://dbus.freedesktop.o
 
 ## 1. The project in one page
 
-The Basel bachelor thesis ("LLM-based Security-Compliance in Event Streams", Valentin Neher,
-supervised by Marco Vogt) does:
+The approach:
 
 1. **k-means clustering** → learn a baseline of "normal" OT network traffic
 2. Deviations from the baseline = **anomalies / potential security incidents**
-3. An **LLM contextualizes** each incident (natural-language description + risk assessment)
+3. Optionally, an **LLM contextualizes** each incident (natural-language description +
+   risk assessment) — a possible future layer, not the current focus
 
-Your job: **make that work better**. First iteration = solid k-means baseline on D-Bus traffic;
-the improvement space (better features, better detectors, better evaluation) is wide open —
-see §5.
+First iteration = a solid k-means baseline on D-Bus traffic; the improvement space (better
+features, better detectors, better evaluation) is wide open — see §5.
 
 The pipeline we are building:
 
@@ -46,7 +45,7 @@ It is also ubiquitous in **embedded and OT-ish devices** (gateways, NUC-class in
 set-top boxes, routers with web UIs) because systemd brings it along for free. That's why
 "D-Bus as the protocol on the network" is a reasonable OT scenario: plenty of real devices
 expose D-Bus, and (as we'll do in the lab) it *can* be run over TCP — unencrypted,
-weakly authenticated. That is exactly the attack surface the thesis is about.
+weakly authenticated. That is exactly the attack surface this project targets.
 
 ### 2.2 Architecture in 30 seconds
 
@@ -191,9 +190,9 @@ sender → this window is far from *every* centroid → alarm.
 - For *anomaly detection*, slightly-too-small k is fine (cruder model → stricter "normal");
   k-means is a *baseline*, not the endgame — don't over-tune it.
 
-### 4.5 Known weaknesses = your improvement menu over the thesis
+### 4.5 Known weaknesses = your improvement menu
 
-| k-means weakness                                   | Better alternative (project "improvement" material)      |
+| k-means weakness                                   | Better alternative                                        |
 |----------------------------------------------------|----------------------------------------------------------|
 | spherical, equal-variance clusters                  | **GMM** (soft boundaries, per-cluster covariance)        |
 | centroids dragged by outliers                       | **Isolation Forest**, **LOF** (purpose-built detectors)  |
@@ -202,8 +201,8 @@ sender → this window is far from *every* centroid → alarm.
 | hard count threshold on distances                   | calibrated thresholds, FPR budget per hour-of-day        |
 | no notion of "gradually drifting normal"            | rolling retrain / drift detection                        |
 
-You don't need all of these — pick 2–3, evaluate properly (§4.6), and you already have a
-defensible "made it better" story. The thesis's LLM contextualization layer is *complementary*:
+You don't need all of these — pick 2–3, evaluate properly (§4.6). A downstream LLM
+contextualization layer (natural-language incident reports) would be *complementary*:
 your detector feeds it better incidents.
 
 ### 4.6 Evaluating honestly

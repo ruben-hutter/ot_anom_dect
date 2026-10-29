@@ -1,8 +1,7 @@
 # ot_anom_dect
 
 Simulate D-Bus-over-TCP traffic in a small containerlab network, capture it,
-and (next step) detect anomalies with k-means — the detection baseline for the
-Basel thesis "LLM-based Security-Compliance in Event Streams".
+and (next step) detect anomalies with k-means.
 
 ## Start in 3 commands
 
@@ -27,6 +26,5 @@ There is no Dockerfile: the nodes are stock `debian:bookworm-slim` images and
 `just up` installs dbus inside them (fine while the lab is this small; bake an
 image when the lab grows).
 
-Background: the thesis being improved studies k-means baselining of OT traffic
-with an LLM contextualizing incidents; our angle is a solid, well-evaluated
-k-means (and beyond) detector for D-Bus event streams.
+Goal: a solid, well-evaluated k-means (and beyond) detector for D-Bus event
+streams.
