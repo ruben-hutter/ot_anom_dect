@@ -1,0 +1,27 @@
+// Optional dev container: run the containerlab lab against a nested
+// docker-in-docker daemon so lab nodes never touch the host's docker.
+// Strictly opt-in: "Reopen in Container". The host workflow is unchanged.
+{
+  "name": "ot-anom lab (docker-in-docker)",
+  // debian-12 (bookworm), not the floating :debian tag (now trixie, which the
+  // docker-in-docker feature's moby archive doesn't support).
+  "image": "mcr.microsoft.com/devcontainers/base:debian-12",
+
+  "features": {
+    // True docker-in-docker: its own dockerd inside this container.
+    // The feature declares `privileged: true` itself -- no runArgs needed.
+    // (No socket-mount flavor: that would put lab nodes on the host daemon.)
+    "ghcr.io/devcontainers/features/docker-in-docker:1": {}
+  },
+
+  // Install nix (single-user) and warm the flake dev shell once, so the
+  // first terminal doesn't pay the store download.
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  // The nix profile (nix itself) lives outside containerEnv; make it
+  // reachable in VS Code terminals. The flake tools (clab, just, python,
+  // tshark) then come from `nix develop` as on the host.
+  "remoteEnv": {
+    "PATH": "/home/vscode/.nix-profile/bin:${containerEnv:PATH}"
+  }
+}

@@ -25,6 +25,19 @@
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          # nixpkgs installs the binary as `containerlab`; the lab invokes
+          # `clab`. clab deploys need root: hosts typically provide a
+          # setuid-root binary (host /usr/bin/containerlab; the dev container
+          # gets one in /usr/local/bin via .devcontainer/post-create.sh).
+          # Prefer a setuid copy when one is on PATH — the nix store is
+          # read-only, so the flake's own binary cannot carry the bit — else
+          # fall back to the pinned nixpkgs binary.
+          clab = pkgs.writeShellScriptBin "clab" ''
+            while IFS= read -r b; do
+              [ -u "$b" ] && exec "$b" "$@"
+            done < <(type -aP containerlab)
+            exec ${pkgs.containerlab}/bin/containerlab "$@"
+          '';
           py = pkgs.python312.withPackages (ps: with ps; [
             numpy
             pandas
@@ -40,9 +53,11 @@
               py
               pkgs.just             # lab orchestration (lab/justfile)
               pkgs.wireshark-cli    # tshark, pcap inspection from the host
+              pkgs.containerlab     # lab deploy; flake-pinned so the dev container gets the same clab
+              clab                  # ... as `clab`, setuid-dispatching (see above)
             ];
             shellHook = ''
-              echo "ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark"
+              echo "ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark, clab"
               echo "lab: cd lab && just --list   (containerlab + docker; container names clab-ot-anom-*)"
             '';
           };

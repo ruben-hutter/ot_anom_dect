@@ -26,5 +26,27 @@ There is no Dockerfile: the nodes are stock `debian:bookworm-slim` images and
 `just up` installs `python3-pymodbus` inside them (fine while the lab is this
 small; bake an image when the lab grows).
 
+## Optional: dev container (docker-in-docker)
+
+`.devcontainer/` defines an **opt-in** VS Code dev container that runs the lab
+against a *nested* docker-in-docker daemon — the `clab-ot-anom-*` nodes never
+appear on the host's docker. Nothing about the host workflow above changes;
+both coexist.
+
+- Open the repo in VS Code → **Reopen in Container**. The first open is slow
+  (nix is installed and the flake store is downloaded once, ~a few minutes);
+  later opens are fast.
+- Inside, the toolchain comes from the same flake: `nix develop path:.`
+  (note the `path:.` — the repo's wtree `.git` points at an absolute host
+  path that doesn't exist inside the container, and `path:` skips git
+  detection), then `cd lab && just up / hello / down` work identically
+  against the nested daemon.
+- `clab` deploys need root, so `post-create.sh` installs a setuid-root copy of
+  the flake-pinned binary in `/usr/local/bin` (same arrangement as the host's
+  `/usr/bin/containerlab`).
+- Caveats: the VS Code Containerlab extension may not find `clab` inside the
+  container (extension shells don't inherit the nix PATH); do git work from
+  the host — the container sees the repo as a plain folder.
+
 Goal: a solid, well-evaluated k-means (and beyond) detector for Modbus TCP
 traffic.
