@@ -1,0 +1,22 @@
+ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark, clab
+lab: cd lab && just --list   (containerlab + docker; container names clab-ot-anom-*)
+
+===== iforest =====
+        scenario | schema | nw | alrt(full) | alrt(scored) | rate(scored) | mean_score(scored) | mean_score(full)
+          normal | OK     | 121 |          1 |            0 |         0.0% |            0.4102 | 0.4134
+      poll-storm | OK     | 121 |          1 |            0 |         0.0% |            0.4365 | 0.4372
+     write-flood | OK     | 121 |          1 |            0 |         0.0% |            0.4352 | 0.4392
+    off-schedule | OK     | 121 |          1 |            0 |         0.0% |            0.4557 | 0.4540
+    rogue-master | OK     | 121 |          1 |            0 |         0.0% |            0.4156 | 0.4202
+ exception-storm | OK     | 121 |          1 |            0 |         0.0% |            0.4090 | 0.4162
+schema-check-all: PASS
+
+===== ewma =====
+        scenario | schema | nw | alrt(full) | alrt(scored) | rate(scored) | mean_score(scored) | mean_score(full)
+          normal | OK     | 121 |          1 |            0 |         0.0% |            0.0000 | 1.8366
+      poll-storm | OK     | 121 |          1 |            1 |         1.6% |            0.0067 | 0.0034
+     write-flood | OK     | 121 |          2 |            0 |         0.0% |            0.0000 | 4.8818
+    off-schedule | OK     | 121 |          1 |            0 |         0.0% |            0.0000 | 1.6101
+    rogue-master | OK     | 121 |          1 |            0 |         0.0% |            0.0000 | 1.2991
+ exception-storm | OK     | 121 |          4 |            3 |         4.9% |            0.2331 | 1.9608
+schema-check-all: PASS

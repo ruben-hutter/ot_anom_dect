@@ -1,0 +1,35 @@
+# Integration matrix — night test 2026-11-13
+windows per file: 121 (combined files: 242, attack starts at window 121)
+NOTE ewma 'alert' column marks new-alarm episodes (onset), kmeans/iforest per-window flags.
+
+## View 1 — standalone: detector run on scenario windows.csv alone
+(kmeans cannot run this shape: it trains on the file head, which would be attack traffic; N/A)
+
+| scenario | iforest n_alerts/rate | ewma n_alerts(rat. ep.)/rate | kmeans |
+|---|---|---|---|
+| poll-storm | 0/0.0% | 1/1.6% | N/A (poisoned train) |
+| write-flood | 0/0.0% | 0/0.0% | N/A (poisoned train) |
+| off-schedule | 0/0.0% | 0/0.0% | N/A (poisoned train) |
+| rogue-master | 0/0.0% | 0/0.0% | N/A (poisoned train) |
+| exception-storm | 0/0.0% | 3/4.9% | N/A (poisoned train) |
+
+## View 2 — combined: normal head (121) + scenario tail (121); train split = normal head
+
+| scenario | kmeans tail | iforest tail | ewma tail | kmeans head | iforest head | ewma head |
+|---|---|---|---|---|---|---|
+| poll-storm | 121/100% | 1/1% | 1/1% | 2/2% | 2/2% | 1/1% |
+| write-flood | 121/100% | 1/1% | 2/2% | 2/2% | 2/2% | 1/1% |
+| off-schedule | 121/100% | 64/53% | 1/1% | 2/2% | 2/2% | 1/1% |
+| rogue-master | 121/100% | 1/1% | 2/2% | 2/2% | 2/2% | 1/1% |
+| exception-storm | 120/99% | 2/2% | 2/2% | 2/2% | 2/2% | 1/1% |
+
+Normal baselines: kmeans normal-only run 1/121 = 0.83% alerts; iforest/ewma normal-only scored region 0/61 (protocol C report).
+
+## mean tail score (combined view) + EWMA out-of-control windows (score>0)
+| scenario | kmeans | iforest | ewma | ewma tail OOC rate |
+|---|---|---|---|---|
+| poll-storm | 193.078 | 0.677 | 57.335 | 100% |
+| write-flood | 85.743 | 0.661 | 36.326 | 100% |
+| off-schedule | 21.694 | 0.755 | 50.318 | 99% |
+| rogue-master | 38.193 | 0.652 | 999997.000 | 100% |
+| exception-storm | 11.101 | 0.408 | 11041319.314 | 100% |

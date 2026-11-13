@@ -1,0 +1,7 @@
+scenario,n_windows,n_alerts,alert_rate_pct,mean_score,mean_score_normal_section_(same_run),n_alerts_normal_section_(same_run)
+normal,121,1,0.83,1.3,,
+poll-storm,121,121,100.0,193.078,0.646,2
+write-flood,121,121,100.0,85.743,0.646,2
+off-schedule,121,121,100.0,21.694,0.646,2
+rogue-master,121,121,100.0,38.193,0.646,2
+exception-storm,121,120,99.17,11.101,0.646,2

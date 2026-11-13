@@ -1,0 +1,55 @@
+ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark, clab
+lab: cd lab && just --list   (containerlab + docker; container names clab-ot-anom-*)
+== HEADER CONTRACT CHECK ==
+pinned : window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+normal            : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+poll-storm        : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+write-flood       : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+off-schedule      : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+rogue-master      : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+exception-storm   : MATCH -> window_id,t_start,t_end,n_req,n_resp,n_except,n_read_fc,n_write_fc,n_other_fc,n_masters,poll_gap_mean_s,poll_gap_cv,n_unique_write_addr
+
+== WINDOW COUNTS / NULL poll_gap_cv per scenario ==
+normal            : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+poll-storm        : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+write-flood       : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+off-schedule      : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+rogue-master      : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+exception-storm   : rows=121  poll_gap_mean_s non-null=121  poll_gap_cv non-null=121
+
+== DIVERGENCE TABLE (window means; normal vs scenario) ==
+       scenario  target_feature  normal_mean  scenario_mean  direction_ok
+     poll-storm poll_gap_mean_s       1.8004         0.1815         False
+    write-flood      n_write_fc       0.1157        30.1983          True
+   off-schedule     poll_gap_cv       0.3323         0.6468         False
+   rogue-master       n_masters       1.0000         2.0000          True
+exception-storm        n_except       0.0000        11.0413          True
+
+== RATIOS ==
+poll-storm: normal poll_gap_mean_s / scenario = 1.8004 / 0.1815 = 9.92x (want >= 10)
+off-schedule: scenario cv / normal cv = 0.6468 / 0.3323 = 1.95x (want >> 1, e.g. >= 3)
+rogue-master: n_masters unique values = [np.int64(2)]
+write-flood: n_write_fc min/max = 14/43
+exception-storm: n_except min/max = 3/19
+
+== FULL WINDOW MEANS (all features) ==
+                    n_req    n_resp  n_except  n_read_fc  n_write_fc  n_other_fc  n_masters  poll_gap_mean_s  poll_gap_cv  n_unique_write_addr
+normal            33.0909   33.0909    0.0000    32.9752      0.1157         0.0        1.0           1.8004       0.3323               0.1074
+poll-storm       327.8595  327.8595    0.0000   327.7438      0.1157         0.0        1.0           0.1815       0.6795               0.1074
+write-flood       62.9421   62.9421    0.0000    32.7438     30.1983         0.0        1.0           1.8125       0.3240               1.0000
+off-schedule      21.4215   21.4215    0.0000    21.3058      0.1157         0.0        1.0           2.8050       0.6468               0.1074
+rogue-master      92.5785   92.5785    0.0000    92.4628      0.1157         0.0        2.0           1.2822       0.4084               0.1074
+exception-storm   33.0909   33.0909   11.0413    32.9752      0.1157         0.0        1.0           1.8004       0.3323               0.1074
+
+SANITY RESULT: FAIL
+ot-anom dev shell: python312 (+pandas/sklearn/pymodbus), just, tshark, clab
+lab: cd lab && just --list   (containerlab + docker; container names clab-ot-anom-*)
+poll_gap_mean_s: normal  min/mean/max = 1.6239 / 1.8004 / 2.0544
+poll_gap_mean_s: storm   min/mean/max = 0.1667 / 0.1815 / 0.2043
+per-window ratio (normal_mean / storm_mean) = 9.9210
+worst-case overlap? normal_min=1.6239 vs storm_max=0.2043 -> NO overlap
+
+poll_gap_cv: normal      min/mean/max = 0.0695 / 0.3323 / 0.4790
+poll_gap_cv: off-sched   min/mean/max = 0.0750 / 0.6468 / 0.8382
+overlap count (off-sched window cv < normal cv mean): 1 / 121
+normal windows with cv >= off-sched mean: 0 / 121
