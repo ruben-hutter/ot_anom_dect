@@ -14,7 +14,10 @@ just down              # tear down
 
 `just hello` is a one-shot smoke test, `just sp 300` simulates an operator
 setpoint change, and `just capture` produces a pcap of the poll traffic in
-`lab/data/`. Details: `lab/README.md`.
+`lab/data/`. The **offline data pipeline needs no lab at all**:
+`cd lab && just simulate`, `just featurize …`, `just sim-all` generate
+lab-like traffic (normal + 5 anomaly scenarios) and window features.
+Details: `lab/README.md`.
 
 ## What each file is
 
@@ -23,6 +26,8 @@ setpoint change, and `just capture` produces a pcap of the poll traffic in
 | `lab/justfile` | lab commands: `up`, `hello`, `run`, `sp`, `capture`, `down` |
 | `lab/clab-ot-anom.clab.yml` | the topology: `modbus-server` (Modbus TCP PLC on :502, register map + 1 Hz process simulation) + `modbus-master` (HMI poller / operator writes); also read by the VS Code Containerlab extension |
 | `lab/modbus/` | the pymodbus scripts bind-mounted into the nodes: `server.py` (PLC + process sim + request log), `master.py` (HMI/SCADA fixed-period poller), `op.py` (operator setpoint write) |
+| `lab/simulate.py` | **offline** traffic simulator → `events.jsonl` (pinned contract): normal + 5 anomaly scenarios, deterministic per `--seed` |
+| `lab/featurize.py` | **offline** featurizer → `windows.csv` (pinned schema) from `events.jsonl` and/or pcaps (host-side tshark) |
 | `docs/primer-modbus-kmeans.md` | **read this**: Modbus TCP + k-means onboarding for this project |
 | `flake.nix` + `flake.lock` + `.envrc` | reproducible dev shell (nix + direnv) |
 
