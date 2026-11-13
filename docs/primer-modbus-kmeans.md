@@ -137,6 +137,46 @@ feature model works at all.
 | `tshark`/Wireshark   | dissects Modbus on tcp/502 natively (`-Y mbtcp`); pcap workbench |
 | `tcpdump`            | passive capture on the sensor node                        |
 
+### 2.7 The other Modbus variants — same protocol, different pipe
+
+Modbus is **one application protocol** (the PDU: function code + data, ≤253 B) wearing several
+ADU framings. The variants differ only in the wrapping:
+
+| Variant   | ADU framing                                                          | Transport            | Status |
+|-----------|----------------------------------------------------------------------|----------------------|--------|
+| **RTU**   | slave addr (1 B) + PDU + CRC-16 (2 B); frames delimited by 3.5-char silence | EIA-232/485 serial | ubiquitous at field level |
+| **ASCII** | same PDU, hex-encoded, LRC checksum                                  | serial               | effectively dead |
+| **TCP**   | MBAP header + PDU (§2.4)                                             | tcp/502, Ethernet    | **this lab** — the inter-level standard |
+| **Modbus+** | token ring over HDLC — its own protocol below the PDU              | proprietary Schneider | effectively dead |
+| "other"   | vendor flavors (RTU-over-UDP, Modbus/TLS, Enron/Daniel dialects)     | various              | niche |
+
+**What transfers between variants.** Everything that lives in the PDU: the whole §3 feature
+backbone (fc mix, read:write ratio, per-address counts/entropy, unit-id sweeps, exception
+storms, poll-dictionary size) applies to RTU unchanged. TCP-only features that don't exist on
+serial: transaction ids / orphans, TCP connection behavior. Serial-only features TCP can't
+teach: CRC-error counts (garbled frames), silence-gap framing — and "new master" means a new
+speaking slave address, not a new IP.
+
+**Real deployments close most of the gap for you**: serial slaves usually sit behind an
+RTU→TCP gateway, so the tap point on segmented networks sees Modbus TCP with unit ids
+multiplexing the serial side (§2.2). Modeling the field as distinct unit ids — as this lab
+does — is faithful to that reality. TCP-first is therefore not a shortcut but the realistic
+vantage point.
+
+**Why not simulate other buses in the lab**: containerlab is netns + Ethernet/IP; a serial bus
+isn't a network in that model, and there is no `tcpdump` on a PTY. Emulating RTU (pymodbus
+serial framer over socat PTY pairs) is possible, but capture degrades to app-layer JSONL
+logging by an interposed shim — losing the passive-pcap sensor model the project is built on.
+ASCII and Modbus+ are museum pieces; skip them. If serial coverage is ever genuinely needed,
+the cheap honest route is hardware: a ~€10 RS-485 USB adapter pair plus an interposing
+sniffer node — outside containerlab. The higher-value extension is *different protocols*
+(S7comm, DNP3, IEC 104, EtherNet/IP): the methodology (windows → features → one-class k-means,
+§3–4) transfers, only the dissector/featurizer changes.
+
+**Design note**: keep **PDU features** (variant-independent) separated from **framing/transport
+features** (variant-specific) in the featurizer, so adding a serial feeder later is a new
+extractor, not a rewrite.
+
 ---
 
 ## 3. From raw messages to features (what to cluster on)
