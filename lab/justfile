@@ -1,30 +1,52 @@
-# ot-anom lab — hello-world Modbus TCP in containerlab.
+# ot-anom lab — mini OT network in containerlab: one PLC with a simulated
+# process, one HMI/SCADA poller, rare operator writes, and pcap capture.
+# The traffic this generates is the "normal" baseline for anomaly detection.
 
 # list available recipes
 default:
     @just --list
 
-# deploy 2 containers (modbus-server + modbus-master) and start the slave.
-# First run installs python3-pymodbus inside them (~1 min, needs internet).
-
-# deploy the lab and start the modbus slave
+# (first run installs python3-pymodbus + tcpdump in the nodes, ~1 min)
+# deploy the lab (PLC + process sim, HMI / operator console) and start the PLC
 up:
     clab dep -t clab-ot-anom.clab.yml
-    docker exec clab-ot-anom-modbus-server sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus >/dev/null'
+    docker exec clab-ot-anom-modbus-server sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus tcpdump >/dev/null'
     docker exec clab-ot-anom-modbus-master sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus >/dev/null'
     docker exec -d clab-ot-anom-modbus-server sh -c 'python3 /opt/modbus/server.py >/tmp/modbus-server.log 2>&1'
-    @echo "lab is up. try: just hello"
+    @echo "lab is up. try: just hello | just run | just sp | just capture"
 
-# hello world: the master writes two holding registers across the network
-# (FC6), polls them back (FC3) and reads the slave's read-only input
-# registers (FC4) — then the server log shows the same exchange from the
-# slave side, register state included.
-
-# run the hello-world modbus exchange, master + slave side by side
+# smoke test: FC6 setpoint write + FC4/FC3 read-back + server log
 hello:
-    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/master.py modbus-server
+    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/op.py modbus-server 240
     @echo "--- modbus-server saw: ---"
-    docker exec clab-ot-anom-modbus-server sh -c 'grep -E "slave up|seeded|applied|served" /tmp/modbus-server.log'
+    docker exec clab-ot-anom-modbus-server sh -c 'grep -E "slave up|seeded|sim:|applied|served" /tmp/modbus-server.log'
+
+# run the HMI/SCADA poller for secs, then tail the server log
+run secs='30':
+    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/master.py modbus-server --duration {{secs}}
+    @echo "--- modbus-server saw (last 15 requests): ---"
+    docker exec clab-ot-anom-modbus-server sh -c 'tail -15 /tmp/modbus-server.log'
+
+# operator action: FC6 write of hr[0] setpoint in tenths of °C
+sp tenths='250':
+    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/op.py modbus-server {{tenths}}
+
+# capture secs of port-502 traffic on the server node into lab/data/
+capture secs='30':
+    #!/bin/sh
+    # server-endpoint capture sees all of the PLC's own traffic; a true
+    # passive tap node is a later step.
+    set -e
+    ts=$(date +%Y%m%d-%H%M%S)
+    docker exec -d clab-ot-anom-modbus-server tcpdump -i any -w /tmp/capture.pcap tcp port 502
+    sleep 1
+    docker exec clab-ot-anom-modbus-master python3 /opt/modbus/master.py modbus-server --duration {{secs}}
+    sleep 1
+    docker exec clab-ot-anom-modbus-server sh -c 'kill $(pidof tcpdump) 2>/dev/null || true'
+    sleep 1
+    mkdir -p data
+    docker cp clab-ot-anom-modbus-server:/tmp/capture.pcap data/capture-$ts.pcap
+    echo "captured lab/data/capture-$ts.pcap — inspect on the host: tshark -r lab/data/capture-$ts.pcap -Y mbtcp"
 
 # tear the lab down
 down:

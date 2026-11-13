@@ -7,18 +7,22 @@ and (next step) detect anomalies with k-means.
 
 ```sh
 direnv allow           # activate the nix dev shell (once, at this root)
-cd lab && just up      # 2 containers: Modbus server + master (first run ~1 min)
-just hello             # hello world: register writes + reads across the network
+cd lab && just up      # 2 containers: PLC + HMI (first run ~1 min)
+just run               # HMI polls the PLC: watch the process value move
 just down              # tear down
 ```
+
+`just hello` is a one-shot smoke test, `just sp 300` simulates an operator
+setpoint change, and `just capture` produces a pcap of the poll traffic in
+`lab/data/`. Details: `lab/README.md`.
 
 ## What each file is
 
 | Path | What it is |
 |---|---|
-| `lab/justfile` | the 3 lab commands: `up`, `hello`, `down` |
-| `lab/clab-ot-anom.clab.yml` | the topology: `modbus-server` (Modbus TCP slave on :502, holds the register map) + `modbus-master` (polls and writes); also read by the VS Code Containerlab extension |
-| `lab/modbus/` | the two pymodbus scripts bind-mounted into the nodes: `server.py` (register map + request log) and `master.py` (write + poll exchange) |
+| `lab/justfile` | lab commands: `up`, `hello`, `run`, `sp`, `capture`, `down` |
+| `lab/clab-ot-anom.clab.yml` | the topology: `modbus-server` (Modbus TCP PLC on :502, register map + 1 Hz process simulation) + `modbus-master` (HMI poller / operator writes); also read by the VS Code Containerlab extension |
+| `lab/modbus/` | the pymodbus scripts bind-mounted into the nodes: `server.py` (PLC + process sim + request log), `master.py` (HMI/SCADA fixed-period poller), `op.py` (operator setpoint write) |
 | `docs/primer-modbus-kmeans.md` | **read this**: Modbus TCP + k-means onboarding for this project |
 | `flake.nix` + `flake.lock` + `.envrc` | reproducible dev shell (nix + direnv) |
 
