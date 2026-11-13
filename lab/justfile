@@ -1,8 +1,13 @@
 # ot-anom lab — hello-world Modbus TCP in containerlab.
-# Run from this directory. `just` alone lists recipes.
+
+# list available recipes
+default:
+    @just --list
 
 # deploy 2 containers (modbus-server + modbus-master) and start the slave.
 # First run installs python3-pymodbus inside them (~1 min, needs internet).
+
+# deploy the lab and start the modbus slave
 up:
     clab dep -t clab-ot-anom.clab.yml
     docker exec clab-ot-anom-modbus-server sh -c 'apt-get update -qq && apt-get install -y -qq python3-pymodbus >/dev/null'
@@ -14,6 +19,8 @@ up:
 # (FC6), polls them back (FC3) and reads the slave's read-only input
 # registers (FC4) — then the server log shows the same exchange from the
 # slave side, register state included.
+
+# run the hello-world modbus exchange, master + slave side by side
 hello:
     docker exec clab-ot-anom-modbus-master python3 /opt/modbus/master.py modbus-server
     @echo "--- modbus-server saw: ---"
