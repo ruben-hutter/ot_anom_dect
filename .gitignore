@@ -10,7 +10,6 @@ lab/clab-ot-anom/
 
 # Agent / AI workflow files — local only, never pushed
 AGENTS.md
-TASK.md
 .scratch/
 docs/agents/
 docs/adr/
