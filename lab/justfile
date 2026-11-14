@@ -31,6 +31,42 @@ run secs='30':
 sp tenths='250':
     docker exec clab-ot-anom-modbus-master python3 /opt/modbus/op.py modbus-server {{tenths}}
 
+# ---- offline data pipeline (host-side scripts, no lab needed) ----
+
+# simulate `hours` of lab-like traffic into data/sim-<scenario>.jsonl
+# scenarios: normal poll-storm write-flood off-schedule rogue-master exception-storm
+simulate hours='1' scenario='normal':
+    python3 simulate.py --hours {{hours}} --scenario {{scenario}} --out data/sim-{{scenario}}.jsonl
+    @echo "-> data/sim-{{scenario}}.jsonl  (featurize: just featurize data/sim-{{scenario}}.jsonl)"
+
+# featurize events.jsonl file(s) into windows.csv
+featurize events out='data/windows.csv':
+    python3 featurize.py --events {{events}} --out {{out}}
+    @echo "-> {{out}}"
+
+# featurize captured pcap(s) into windows.csv (glob ok, parsed on the host)
+featurize-pcap pcap out='data/windows.csv':
+    python3 featurize.py --pcap {{pcap}} --out {{out}}
+    @echo "-> {{out}}"
+
+# generate all 6 scenarios + per-scenario windows.csv + feature comparison table
+sim-all hours='0.5':
+    #!/bin/sh
+    set -e
+    mkdir -p data
+    for s in normal poll-storm write-flood off-schedule rogue-master exception-storm; do
+        python3 simulate.py --hours {{hours}} --scenario "$s" --out "data/sim-$s.jsonl"
+        python3 featurize.py --events "data/sim-$s.jsonl" --out "data/sim-$s-windows.csv" 2>/dev/null
+    done
+    python3 - data/sim-*-windows.csv <<'EOF'
+    import sys
+    import pandas as pd
+    frames = {p.split("sim-")[1].split("-windows")[0]: pd.read_csv(p) for p in sys.argv[1:]}
+    cols = ["n_req", "n_write_fc", "n_except", "n_masters", "poll_gap_mean_s", "poll_gap_cv"]
+    print("window means:")
+    print(pd.DataFrame({k: f[cols].mean() for k, f in frames.items()}).round(3).to_string())
+    EOF
+
 # capture secs of port-502 traffic on the server node into lab/data/
 capture secs='30':
     #!/bin/sh
