@@ -14,9 +14,13 @@ Input is the pinned windows schema (produced by the anom-data pipeline):
   - t_* are identity/time columns and never enter clustering.
   - poll_gap_* may be empty (undefined when a window has < 2 read requests);
     such NaNs are imputed with the TRAINING-split median of that column.
-  - The file is assumed sorted by time and to start with the normal capture,
-    so the training split is simply the head of the file (first --train-fraction
-    of the rows, in file order).
+  - Default (head-split) mode: the file is assumed sorted by time and to start
+    with the normal capture, so the training split is simply the head of the
+    file (first --train-fraction of the rows, in file order).
+  - Reference mode (--train-file <normal windows.csv>): the model trains on
+    ALL rows of the given normal-only file and every row of --in is scored
+    against it. Use this when --in does NOT start with normal traffic, e.g.
+    the per-scenario outputs of `simulate.py --scenario`.
 
 Output is the shared alerts schema all detectors emit:
 
@@ -31,6 +35,8 @@ Inertia for each k is printed so the elbow is visible too.
 Usage:
     python3 lab/detect_kmeans.py --in lab/data/windows.csv --out lab/data/alerts-kmeans.csv
     python3 lab/detect_kmeans.py --in ... --out ... --model-out lab/data/kmeans-model.joblib
+    python3 lab/detect_kmeans.py --in lab/data/sim-poll-storm-windows.csv \
+        --train-file lab/data/sim-normal-windows.csv --out lab/data/alerts.csv
     python3 lab/detect_kmeans.py --selftest        # synthetic-data test suite (exits 0 on pass)
 """
 
@@ -122,40 +128,53 @@ def fit_baseline(Z_train: np.ndarray, kmax: int, forced_k: int | None,
 
 
 def detect(df: pd.DataFrame, *, features: str | None = None,
-           train_fraction: float = 0.5, quantile: float = 0.99,
+           train_fraction: float = 0.5, train_df: pd.DataFrame | None = None,
+           quantile: float = 0.99,
            kmax: int = KMAX_DEFAULT, forced_k: int | None = None,
            seed: int = 0):
-    """Full pipeline on a windows DataFrame. Returns (alerts_df, meta)."""
+    """Full pipeline on a windows DataFrame. Returns (alerts_df, meta).
+
+    train_df: optional normal-only reference windows (--train-file mode).
+    When given, the model trains on ALL of its rows and every row of `df`
+    is scored against it; otherwise the training split is the head of `df`
+    (first train_fraction of the rows).
+    """
     n = len(df)
-    n_train = int(round(train_fraction * n))
-    n_train = max(1, min(n_train, n))
+    ref = df if train_df is None else train_df  # rows the model trains on
+    n_train = len(ref) if train_df is not None else \
+        max(1, min(int(round(train_fraction * len(ref))), len(ref)))
     if n_train < MIN_TRAIN:
         raise SystemExit(
             f"training split has {n_train} window(s) (< {MIN_TRAIN}); "
             "need more windows or a larger --train-fraction")
 
     # -- features: numeric coercion, drop non-numeric, impute NaN from train
-    feats = pick_features(df, features)
-    X = df[feats].apply(pd.to_numeric, errors="coerce")
-    med = X.iloc[:n_train].median()
-    dropped = [c for c in X.columns if pd.isna(med[c])]  # all-NaN in train
+    feats = pick_features(ref, features)
+    R = ref[feats].apply(pd.to_numeric, errors="coerce")  # training rows
+    X = df[feats].apply(pd.to_numeric, errors="coerce")   # scored rows
+    med = R.median() if train_df is not None else R.iloc[:n_train].median()
+    dropped = [c for c in R.columns if pd.isna(med[c])]  # all-NaN in train
     if dropped:
         print(f"note: dropping column(s) with no numeric data in the "
               f"training split: {dropped}")
+        R = R.drop(columns=dropped)
         X = X.drop(columns=dropped)
         med = med.drop(index=dropped)
     n_imputed = int(X.isna().to_numpy().sum())
+    R = R.fillna(med)
     X = X.fillna(med)
     if X.shape[1] == 0:
         raise SystemExit("no numeric feature columns found")
 
     # -- standardize with train statistics only (stored & reused for all rows)
-    scaler = StandardScaler().fit(X.iloc[:n_train])
+    R_train = R if train_df is not None else R.iloc[:n_train]
+    scaler = StandardScaler().fit(R_train)
+    Zr = scaler.transform(R_train)
     Z = scaler.transform(X)
 
     # -- one-class k-means baseline + distance threshold from train scores
-    model, k, rule, table = fit_baseline(Z[:n_train], kmax, forced_k, seed)
-    train_scores = model.transform(Z[:n_train]).min(axis=1)
+    model, k, rule, table = fit_baseline(Zr, kmax, forced_k, seed)
+    train_scores = model.transform(Zr).min(axis=1)
     scores = model.transform(Z).min(axis=1)
     threshold = float(np.quantile(train_scores, quantile))
     alerts = (scores > threshold).astype(int)
@@ -163,7 +182,8 @@ def detect(df: pd.DataFrame, *, features: str | None = None,
     out = pd.DataFrame({"window_id": df["window_id"].to_numpy(),
                         "score": scores, "alert": alerts})
     meta = {
-        "n": n, "n_train": n_train, "features": list(X.columns),
+        "n": n, "n_train": n_train, "train_file": train_df is not None,
+        "features": list(X.columns),
         "n_imputed": n_imputed, "impute_medians": med,
         "k": k, "k_rule": rule, "k_table": table,
         "threshold": threshold, "quantile": quantile,
@@ -174,7 +194,9 @@ def detect(df: pd.DataFrame, *, features: str | None = None,
 
 def print_summary(out: pd.DataFrame, meta: dict) -> None:
     n_alert = int(out["alert"].sum())
-    print(f"windows: {meta['n']} total, {meta['n_train']} used for training")
+    src = "  [trained on --train-file]" if meta.get("train_file") else ""
+    print(f"windows: {meta['n']} total, {meta['n_train']} used for "
+          f"training{src}")
     print(f"features ({len(meta['features'])}): {', '.join(meta['features'])}"
           + (f"  [{meta['n_imputed']} NaN cell(s) imputed with train median]"
              if meta["n_imputed"] else ""))
@@ -366,6 +388,35 @@ def selftest(seed: int) -> int:
     assert recall > 0.80, f"recall {recall:.3f} on attacks <= 80%"
     print(f"\nPASS: alert rate on normal {100 * far:.2f}% (<5%), "
           f"recall on attacks {100 * recall:.2f}% (>80%)")
+
+    # --train-file mode: train on a normal-only reference file, score a file
+    # that is attack from window 0 (the shape of simulate.py --scenario
+    # outputs, which the head-split mode cannot consume).
+    rng2 = np.random.default_rng(seed + 1)
+    normal_rows = [_normal_window(rng2) for _ in range(240)]
+    attack_rows = [gen(rng2) for _name, gen in ATTACKS for _ in range(20)]
+
+    def _frame(rows: list[dict], t0: float) -> pd.DataFrame:
+        d = pd.DataFrame(rows)
+        d["t_start"] = t0 + np.arange(len(d)) * WINDOW_S
+        d["t_end"] = d["t_start"] + WINDOW_S
+        d.insert(0, "window_id", np.arange(len(d)))
+        return d[CONTRACT_COLUMNS]
+
+    ref_df = _frame(normal_rows, 0.0)
+    atk_df = _frame(attack_rows, len(ref_df) * WINDOW_S)
+    out_rf, _meta_rf = detect(atk_df, train_df=ref_df)
+    recall_rf = float(out_rf["alert"].mean())     # every scored row is attack
+    out_nn, _meta_nn = detect(ref_df, train_df=ref_df)
+    far_nn = float(out_nn["alert"].mean())
+    print(f"\n--train-file mode: reference = {len(ref_df)} normal windows, "
+          f"scored file = {len(atk_df)} attack windows (attack from window 0)")
+    print(f"  recall on attack-only file {100 * recall_rf:.2f}%, "
+          f"alert rate on normal reference {100 * far_nn:.2f}%")
+    assert recall_rf > 0.80, f"--train-file recall {recall_rf:.3f} <= 80%"
+    assert far_nn < 0.05, f"--train-file normal alert rate {far_nn:.3f} >= 5%"
+    print(f"PASS: --train-file mode recall {100 * recall_rf:.2f}% (>80%), "
+          f"normal alert rate {100 * far_nn:.2f}% (<5%)")
     return 0
 
 
@@ -378,12 +429,19 @@ def main(argv=None) -> int:
         epilog="examples:\n"
                "  %(prog)s --in lab/data/windows.csv --out lab/data/alerts-kmeans.csv\n"
                "  %(prog)s --in lab/data/windows.csv --out a.csv --model-out m.joblib --k 1\n"
+               "  %(prog)s --in scenario-windows.csv --train-file normal-windows.csv --out a.csv\n"
                "  %(prog)s --selftest")
     p.add_argument("--in", dest="infile", help="input windows.csv (pinned schema)")
     p.add_argument("--out", dest="outfile", help="output alerts CSV: window_id,score,alert")
+    p.add_argument("--train-file", dest="train_file", default=None,
+                   help="train on ALL rows of this normal-only windows.csv "
+                        "instead of the head of --in; use when --in does not "
+                        "start with normal traffic (e.g. `simulate.py "
+                        "--scenario` outputs); --train-fraction is ignored")
     p.add_argument("--train-fraction", type=float, default=0.5,
                    help="head fraction of windows to train on (default 0.5; "
-                        "input must start with normal traffic)")
+                        "input must start with normal traffic; ignored with "
+                        "--train-file)")
     p.add_argument("--threshold-quantile", type=float, default=0.99,
                    help="alert threshold = this quantile of TRAINING "
                         "distances (default 0.99)")
@@ -407,10 +465,11 @@ def main(argv=None) -> int:
         p.error("--in and --out are required (or use --selftest)")
 
     df = pd.read_csv(args.infile)
+    train_df = pd.read_csv(args.train_file) if args.train_file else None
     out, meta = detect(
         df, features=args.features, train_fraction=args.train_fraction,
-        quantile=args.threshold_quantile, kmax=args.kmax, forced_k=args.k,
-        seed=args.seed)
+        train_df=train_df, quantile=args.threshold_quantile, kmax=args.kmax,
+        forced_k=args.k, seed=args.seed)
     print_summary(out, meta)
     out.to_csv(args.outfile, index=False)
     print(f"wrote {args.outfile} ({len(out)} rows, schema window_id,score,alert)")
