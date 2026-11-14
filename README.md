@@ -1,7 +1,8 @@
 # ot_anom_dect
 
 Simulate Modbus TCP traffic in a small containerlab network, capture it,
-and (next step) detect anomalies with k-means.
+and detect anomalies with one-class k-means over 60 s traffic windows.
+Current results: [`reports/results-kmeans.md`](reports/results-kmeans.md).
 
 ## Start in 3 commands
 
@@ -28,12 +29,22 @@ Details: `lab/README.md`.
 | `lab/modbus/` | the pymodbus scripts bind-mounted into the nodes: `server.py` (PLC + process sim + request log), `master.py` (HMI/SCADA fixed-period poller), `op.py` (operator setpoint write) |
 | `lab/simulate.py` | **offline** traffic simulator → `events.jsonl` (pinned contract): normal + 5 anomaly scenarios, deterministic per `--seed` |
 | `lab/featurize.py` | **offline** featurizer → `windows.csv` (pinned schema) from `events.jsonl` and/or pcaps (host-side tshark) |
+| `lab/detect_kmeans.py` | **offline** one-class k-means detector → `alerts CSV` (`window_id,score,alert`); train on a normal reference (`--train-file`) or on the head of the input; `--selftest` included |
+| `reports/` | results report with plots (`results-kmeans.md`), detector method doc (`detect-kmeans.md`), plot script |
 | `docs/primer-modbus-kmeans.md` | **read this**: Modbus TCP + k-means onboarding for this project |
 | `flake.nix` + `flake.lock` + `.envrc` | reproducible dev shell (nix + direnv) |
 
 There is no Dockerfile: the nodes are stock `debian:bookworm-slim` images and
 `just up` installs `python3-pymodbus` inside them (fine while the lab is this
 small; bake an image when the lab grows).
+
+## Results
+
+The detector flags **99–100% of windows** in all five injected scenarios
+(poll storm, write flood, off-schedule polling, rogue master, exception
+storm) at a **1.7% alert rate on normal** traffic; features extracted from a
+real 120 s lab capture match the simulator's normal magnitudes. Tables,
+plots and one-command reproduction: [`reports/results-kmeans.md`](reports/results-kmeans.md).
 
 ## Optional: dev container (docker-in-docker)
 
